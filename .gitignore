@@ -1,0 +1,62 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+# Abaikan folder dataset yang sangat besar (sesuaikan nama foldernya jika beda)
+machine-learning/dataset/
+machine-learning/dataset/
+
+# Abaikan folder hasil training YOLO
+machine-learning/runs/
+machine-learning/runs/
+
+# Abaikan file model/bobot bawaan
+*.pt
+
+# Izinkan file best.pt hasil akhir agar tetap masuk ke Git
+!machine-learning/runs/classify/train/weights/best.pt
+!machine-learning/runs/classify/train/weights/best.pt
+
+# Abaikan cache dan virtual environm    ent Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
