@@ -1,10 +1,12 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
-from PIL import Image
+from PIL import Image, ImageOps, ImageStat
 import io
 import os
 from pathlib import Path
+
+TARGET_IMAGE_SIZE = 32
 
 app = FastAPI()
 
@@ -48,6 +50,32 @@ def resolve_model_path() -> Path:
 model_path = resolve_model_path()
 model = YOLO(str(model_path))
 
+
+def preprocess_for_inference(image: Image.Image) -> tuple[Image.Image, bool]:
+    gray = ImageOps.grayscale(image)
+    gray = ImageOps.autocontrast(gray, cutoff=1)
+
+    # Jika background dominan terang (mis. screenshot Notepad), balik agar mirip MNIST.
+    mean_intensity = ImageStat.Stat(gray).mean[0]
+    inverted = mean_intensity > 127
+    if inverted:
+        gray = ImageOps.invert(gray)
+
+    # Fokus ke area tulisan agar digit lebih centered.
+    bw = gray.point(lambda p: 255 if p > 40 else 0)
+    bbox = bw.getbbox()
+    if bbox:
+        gray = gray.crop(bbox)
+
+    gray = ImageOps.pad(
+        gray,
+        (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE),
+        method=Image.Resampling.BICUBIC,
+        color=0,
+        centering=(0.5, 0.5),
+    )
+    return gray.convert("RGB"), inverted
+
 @app.get("/")
 def read_root():
     return {
@@ -63,6 +91,7 @@ async def tebak_angka(file: UploadFile = File(...)):
         # 1. Baca gambar yang dikirim dari Vue
         image_bytes = await file.read()
         image = Image.open(io.BytesIO(image_bytes))
+        image, was_inverted = preprocess_for_inference(image)
 
         # 2. Suruh YOLO menebak gambar tersebut
         results = model(image)
@@ -76,7 +105,11 @@ async def tebak_angka(file: UploadFile = File(...)):
         return {
             "status": "sukses",
             "angka": tebakan,
-            "persentase_keyakinan": f"{keyakinan:.2f}%"
+            "persentase_keyakinan": f"{keyakinan:.2f}%",
+            "preprocessing": {
+                "auto_invert": was_inverted,
+                "target_size": TARGET_IMAGE_SIZE,
+            },
         }
     except Exception as e:
         return {"status": "error", "pesan": str(e)}
