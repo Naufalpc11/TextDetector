@@ -10,13 +10,17 @@ def main():
     # Mulai training
     # PENTING: Pastikan parameter 'data' sama persis dengan nama folder dataset gambarmu!
     results = model.train(
-        data="./dataset/mnist_png", 
-        epochs=10,            # Belajar mengulang dataset 10 kali
-        imgsz=32,             # Ukuran gambar diubah ke 32x32 pixel
-        device="cpu"          # Hapus baris ini atau ubah jadi "0" kalau laptopmu pakai GPU NVIDIA
+        data="./dataset/mnist_png",
+        epochs=10,             # Belajar mengulang dataset 10 kali
+        imgsz=32,              # Ukuran gambar diubah ke 32x32 pixel
+        device="cpu",          # Hapus baris ini atau ubah jadi "0" kalau laptopmu pakai GPU NVIDIA
+        project="runs/classify",
+        name="train",
+        exist_ok=True
     )
-    
-    print("Training Selesai! Model terbaikmu ada di folder runs/classify/train/weights/best.pt")
+
+    print(f"Training selesai. Folder hasil: {results.save_dir}")
+    print("Model terbaik: runs/classify/train/weights/best.pt")
 
 if __name__ == '__main__':
     main()
