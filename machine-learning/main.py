@@ -30,7 +30,10 @@ def resolve_model_path() -> Path:
         return stable_path
 
     candidates = sorted(
-        Path("runs/classify").glob("*/weights/best.pt"),
+        [
+            p for p in Path("runs").rglob("weights/best.pt")
+            if "classify" in p.parts
+        ],
         key=lambda p: p.stat().st_mtime,
         reverse=True
     )
@@ -49,7 +52,9 @@ model = YOLO(str(model_path))
 def read_root():
     return {
         "pesan": "API Machine Learning Aktif!",
-        "model_path": str(model_path)
+        "model_path": str(model_path),
+        "jumlah_kelas": len(model.names),
+        "kelas": list(model.names.values())
     }
 
 @app.post("/tebak-angka")
