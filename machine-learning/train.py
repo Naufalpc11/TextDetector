@@ -82,14 +82,14 @@ def build_preprocessed_dataset(dataset_root: Path) -> Path:
     marker_file = output_root / f".{PREPROCESS_VERSION}.done"
 
     if marker_file.exists():
+        print(f"Preprocessing: cache ditemukan, skip proses ulang di {output_root}")
         return output_root
 
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
 
-    total_images = 0
-    failed_images = 0
+    image_tasks: list[tuple[Path, Path]] = []
     for split in ("train", "val"):
         split_dir = dataset_root / split
         if not split_dir.is_dir():
@@ -101,12 +101,28 @@ def build_preprocessed_dataset(dataset_root: Path) -> Path:
                 if src_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
                     continue
                 dst_path = output_root / split / class_dir.name / f"{src_path.stem}.png"
-                total_images += 1
-                if not preprocess_single_image(src_path, dst_path):
-                    failed_images += 1
+                image_tasks.append((src_path, dst_path))
 
-    if total_images == 0:
+    total_candidates = len(image_tasks)
+    if total_candidates == 0:
         raise ValueError("Tidak ada gambar yang ditemukan untuk preprocessing.")
+
+    print(f"Preprocessing: mulai memproses {total_candidates} gambar...")
+
+    total_images = 0
+    failed_images = 0
+    progress_step = max(1, total_candidates // 10)
+    for index, (src_path, dst_path) in enumerate(image_tasks, start=1):
+        total_images += 1
+        if not preprocess_single_image(src_path, dst_path):
+            failed_images += 1
+
+        if index == total_candidates or index % progress_step == 0:
+            progress_percent = (index / total_candidates) * 100
+            print(
+                f"Preprocessing progress: {index}/{total_candidates} "
+                f"({progress_percent:.0f}%)"
+            )
 
     if failed_images > 0:
         raise ValueError(
@@ -119,6 +135,7 @@ def build_preprocessed_dataset(dataset_root: Path) -> Path:
         f"images={total_images}\n",
         encoding="utf-8",
     )
+    print("Preprocessing selesai dan cache berhasil dibuat.")
     return output_root
 
 
