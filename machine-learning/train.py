@@ -2,6 +2,11 @@ from ultralytics import YOLO
 from pathlib import Path
 import os
 import shutil
+from PIL import Image, ImageOps
+
+
+PREPROCESS_VERSION = "v1"
+TARGET_IMAGE_SIZE = 32
 
 
 def ensure_dir_link_or_copy(src: Path, dst: Path) -> None:
@@ -50,10 +55,78 @@ def validate_dataset(dataset_root: Path) -> None:
             f"val kurang kelas: {missing_val or 'tidak ada'}."
         )
 
+
+def preprocess_single_image(src_path: Path, dst_path: Path) -> bool:
+    try:
+        with Image.open(src_path) as image:
+            # Standardisasi kontras dan ukuran agar distribusi input lebih konsisten.
+            image = ImageOps.grayscale(image)
+            image = ImageOps.autocontrast(image, cutoff=1)
+            image = ImageOps.pad(
+                image,
+                (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE),
+                method=Image.Resampling.BICUBIC,
+                color=0,
+                centering=(0.5, 0.5),
+            )
+            image = image.convert("RGB")
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(dst_path, format="PNG", optimize=True)
+        return True
+    except Exception:
+        return False
+
+
+def build_preprocessed_dataset(dataset_root: Path) -> Path:
+    output_root = dataset_root.parent / f"_preprocessed_cls_{TARGET_IMAGE_SIZE}"
+    marker_file = output_root / f".{PREPROCESS_VERSION}.done"
+
+    if marker_file.exists():
+        return output_root
+
+    if output_root.exists():
+        shutil.rmtree(output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    total_images = 0
+    failed_images = 0
+    for split in ("train", "val"):
+        split_dir = dataset_root / split
+        if not split_dir.is_dir():
+            continue
+        for class_dir in sorted([p for p in split_dir.iterdir() if p.is_dir()]):
+            for src_path in class_dir.iterdir():
+                if not src_path.is_file():
+                    continue
+                if src_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
+                    continue
+                dst_path = output_root / split / class_dir.name / f"{src_path.stem}.png"
+                total_images += 1
+                if not preprocess_single_image(src_path, dst_path):
+                    failed_images += 1
+
+    if total_images == 0:
+        raise ValueError("Tidak ada gambar yang ditemukan untuk preprocessing.")
+
+    if failed_images > 0:
+        raise ValueError(
+            f"Preprocessing gagal pada {failed_images} dari {total_images} gambar."
+        )
+
+    marker_file.write_text(
+        f"preprocess_version={PREPROCESS_VERSION}\n"
+        f"image_size={TARGET_IMAGE_SIZE}\n"
+        f"images={total_images}\n",
+        encoding="utf-8",
+    )
+    return output_root
+
+
 def main():
     raw_dataset_root = Path("./dataset/mnist_png")
     dataset_root = prepare_dataset_root(raw_dataset_root)
     validate_dataset(dataset_root)
+    preprocessed_root = build_preprocessed_dataset(dataset_root)
 
     # Memuat model YOLO versi klasifikasi yang paling ringan
     # Catatan: Jika error karena versi 12 belum stabil, ubah menjadi "yolov8n-cls.pt"
@@ -62,16 +135,29 @@ def main():
     print("Memulai proses training AI...")
     
     # Mulai training
-    # PENTING: Pastikan parameter 'data' sama persis dengan nama folder dataset gambarmu!
     results = model.train(
-        data=str(dataset_root),
-        epochs=10,             # Belajar mengulang dataset 10 kali
-        imgsz=32,              # Ukuran gambar diubah ke 32x32 pixel
-        device="cpu",          # Hapus baris ini atau ubah jadi "0" kalau laptopmu pakai GPU NVIDIA
+        data=str(preprocessed_root),
+        epochs=20,             # Tambah epoch agar model sempat konvergen
+        imgsz=TARGET_IMAGE_SIZE,
+        batch=128,
+        patience=8,
+        optimizer="AdamW",
+        lr0=0.002,
+        weight_decay=0.0005,
+        cos_lr=True,
+        augment=True,
+        fliplr=0.0,            # Flip kiri-kanan kurang cocok untuk digit
+        flipud=0.0,
+        degrees=8.0,
+        translate=0.08,
+        scale=0.15,
+        erasing=0.1,
+        device="cpu",
         exist_ok=True
     )
 
-    print(f"Dataset yang dipakai: {dataset_root}")
+    print(f"Dataset original: {dataset_root}")
+    print(f"Dataset preprocessing: {preprocessed_root}")
     print(f"Training selesai. Folder hasil: {results.save_dir}")
     print("Model terbaik ada di <save_dir>/weights/best.pt")
 
