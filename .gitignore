@@ -39,12 +39,8 @@ __screenshots__/
 *.timestamp-*-*.mjs
 
 # Abaikan folder dataset yang sangat besar (sesuaikan nama foldernya jika beda)
-machine-learning/dataset/
-machine-learning/dataset/
-
-# Abaikan folder hasil training YOLO
-machine-learning/runs/
-machine-learning/runs/
+machine-learning/dataset/mnist_png_split
+machine-learning/dataset/mnist_png
 
 # Abaikan file model/bobot bawaan
 *.pt
